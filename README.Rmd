@@ -7,7 +7,11 @@ output: github_document
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>"
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "90%",
+  out.height = "90%",
+  fig.retina = 2
 )
 ```
 
@@ -161,8 +165,8 @@ plot4 <- norm_spec %>%
     )
 ```
 
-```{r}
-plot3 / plot4
+```{r fig.height=3, fig.width=10}
+plot3 | plot4
 ```
 
 

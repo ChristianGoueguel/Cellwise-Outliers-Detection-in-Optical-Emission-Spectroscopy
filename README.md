@@ -24,10 +24,10 @@ plot2 <- plotSpec(data = norm_spec) + labs(y = "Normalized intensity")
 plot1 / plot2
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+<img src="man/figures/README-unnamed-chunk-4-1.png" width="90%" height="90%" />
 
 ``` r
-plot3 / plot4
+plot3 | plot4
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+<img src="man/figures/README-unnamed-chunk-5-1.png" width="90%" height="90%" />
