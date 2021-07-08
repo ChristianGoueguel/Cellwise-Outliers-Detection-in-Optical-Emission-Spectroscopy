@@ -1,0 +1,266 @@
+---
+title: "Analysis of Cranberry LIBS Spectra"
+author: "Christian L. Goueguel"
+date: "08/07/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  results = "hide",
+  collapse = TRUE,
+  warning = FALSE,
+  error = FALSE,
+  include = TRUE,
+  message = FALSE,
+  tidy = "formatR",
+  highlight = TRUE,
+  background = "#F7F7F7",
+  fig.path = "~/Documents/Medium Articles/Cellwise-Outliers-Detection-in-Optical-Emission-Spectroscopy/plots",
+  fig.show = "animate",
+  fig.align = "center",
+  out.width = "100%",
+  out.height = "100%",
+  fig.retina = 2,
+  dev = "png"
+  )
+```
+
+```{r}
+ssh = suppressPackageStartupMessages
+ssh(library(tidyposterior))
+ssh(library(tidymodels))
+ssh(library(tidyverse))
+ssh(library(doParallel))
+ssh(library(magrittr))
+ssh(library(caret))
+library(HotellingEllipse)
+library(data.table)
+library(patchwork)
+```
+
+```{r}
+cranberry <- fread("~/Documents/Medium Articles/raw data/cranberry.csv")
+```
+
+```{r}
+cranberry %>% as_tibble() %>% head(5)
+```
+
+```{r}
+cranberry %<>%
+  as_tibble() %>%
+  modify_at(
+    c("qr_code", "supplier_id", "carrousel_id", "spectra_id"), as_factor
+    )
+```
+
+```{r}
+wavelength_var <- cranberry %>%
+  select(-c(qr_code:timestamp)) %>%
+  names() %>%
+  as.character()
+```
+
+```{r}
+cranberry %>% 
+  select(-all_of(wavelength_var)) %>%
+  visdat::vis_dat(sort_type = TRUE)
+```
+
+```{r}
+dt <- cranberry %>%
+  select(spectra_id, all_of(wavelength_var)) %>%
+  data.table()
+
+avg_spec <- dt[ ,lapply(.SD, mean), by = spectra_id] %>%
+  as_tibble() %>%
+  inner_join(
+    x = select(cranberry, -all_of(wavelength_var)) %>%
+      distinct(spectra_id, .keep_all = TRUE),
+    y = ., 
+    by = "spectra_id"
+    )
+```
+
+```{r}
+avg_spec %>% as_tibble() %>% head(5)
+```
+
+```{r}
+set.seed(210)
+bc <- avg_spec %>%
+  select(all_of(wavelength_var)) %>%
+  as.matrix() %>%
+  baseline::baseline.modpolyfit(degree = 4, tol = 0.001, rep = 100)
+```
+
+```{r}
+# A function replacing negative values with 0
+# "if the value is less than 0, put 0, else leave it alone"
+replace_with_zero <- function(x) {
+  ifelse(x < 0, yes = 0, no = x)
+}
+```
+
+```{r}
+bc_spec <- bc %>%
+  pluck("corrected") %>%
+  as_tibble() %>%
+  map_dfr(., replace_with_zero) %>%
+  bind_cols(select(avg_spec, -all_of(wavelength_var)), .)
+```
+
+```{r}
+colnames(bc_spec)[11:7162] <- wavelength_var
+```
+
+```{r}
+bc_spec %>% as_tibble() %>% head(5)
+```
+
+```{r}
+plotScpec <- function(data) {
+  data %>%
+  select(supplier_id, spectra_id, all_of(wavelength_var)) %>%
+  pivot_longer(
+    cols = !c(supplier_id, spectra_id),
+    names_to = "wavelength",
+    values_to = "intensity"
+    ) %>%
+  modify_at("wavelength", as.numeric) %>%
+  ggplot(aes(x = wavelength, y = intensity)) +
+  geom_line(aes(color = supplier_id, group = spectra_id)) +
+  labs(x = "Wavelength [nm]", y = "Intensity [arb. units]") +
+  theme(
+    legend.position = "none",
+    axis.line = element_line(colour = "grey50", size = 1)
+    )
+}
+```
+
+```{r}
+plotScpec(data = bc_spec)
+```
+
+```{r}
+norm_spec <- bc_spec %>%
+  select(all_of(wavelength_var)) %>%
+  mutate(across(.cols = everything(), .fns = ~.x/`247.8433039`)) %>%
+  bind_cols(select(bc_spec, -all_of(wavelength_var)), .)
+```
+
+```{r}
+plotScpec(data = norm_spec) + labs(y = "Normalized intensity")
+```
+
+```{r}
+set.seed(010)
+robpca_mod <- norm_spec %>%
+  select(all_of(wavelength_var)) %>%
+  scale(center = TRUE, scale = FALSE) %>%
+  as.matrix() %>%
+  rospca::robpca(
+    k = 0,
+    kmax = 5,
+    alpha = 0.75,
+    h = NULL,
+    mcd = FALSE,
+    ndir = 5000,
+    skew = TRUE
+    )
+
+j_eig <- robpca_mod %>% pluck("eigenvalues")
+  j <- length(j_eig)
+  robpca_eig <- matrix(nrow = 1, ncol = j)
+  for (i in 1:j) {
+    robpca_eig[, i] <- j_eig[i] / sum(j_eig)
+  }
+```
+
+```{r}
+tibble(
+  components = seq(1, j), 
+  variance = t(robpca_eig*100)
+  ) %>%
+  ggplot() +
+  geom_col(
+    aes(x = components, y = variance), 
+    fill = "#17456E", colour = "black", position = "dodge") +
+    geom_text(
+      aes(
+        x = components, y = variance, 
+        label = paste0(signif(variance, digits = 3), "%")), 
+      nudge_x = 0.1, nudge_y = 4) +
+    ylim(0, 105) +
+    labs(x = "Principal component", y = "Percent explained variance")
+```
+
+```{r}
+norm_spec %>%
+    select(supplier_id, spectra_id, analysis_date) %>%
+    bind_cols(pluck(robpca_mod, "scores") %>% as_tibble()) %>%
+    ggplot() +
+    aes(
+      x = PC1, y = PC2, fill = analysis_date, 
+      text = paste("Spec:", spectra_id, "\n", "Sample:", supplier_id)) +
+    scale_fill_viridis_c(option = "viridis") +
+    geom_point(alpha = 1, shape = 21, size = 3, color = "black") +
+    geom_hline(
+      yintercept = 0, linetype = "solid", 
+      color = "black", size = 0.2) +
+    geom_vline(
+      xintercept = 0, linetype = "solid", 
+      color = "black", size = 0.2)+
+    geom_rug(
+      stat = "identity", size = 0.3, alpha = 1/5, 
+      colour = "#08306b", position = "jitter") +
+    theme_bw() +
+    theme(
+      legend.position = "none",
+      panel.grid.major = element_blank(), 
+      panel.grid.minor = element_blank(),
+      axis.title.x = element_text(face = "bold"),
+      axis.title.y = element_text(face = "bold")
+    )
+```
+
+```{r}
+norm_spec %>%
+  select(supplier_id, spectra_id, analysis_date) %>%
+  bind_cols(
+    tibble(
+      sd =pluck(robpca_mod, "sd"), 
+      od = pluck(robpca_mod, "od"))
+    ) %>%
+    ggplot(aes(x = sd, y = od, fill = analysis_date)) +
+    scale_fill_viridis_c(option = "viridis") +
+    geom_point(alpha = 1, shape = 21, size = 3, color = "black") +
+    geom_hline(
+      yintercept = pluck(robpca_mod, "cutoff.od"), 
+      linetype = "solid", color = "red", size = 0.2) +
+    geom_vline(
+      xintercept = pluck(robpca_mod, "cutoff.sd"), 
+      linetype = "solid", color = "red", size = 0.2) +
+    labs(x = "Score distance", y = "Orthogonal distance") +
+    theme_bw() +
+    theme(
+      legend.position = "none", 
+      axis.title.x = element_text(face = "bold"),
+      axis.title.y = element_text(face = "bold")
+    )
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
