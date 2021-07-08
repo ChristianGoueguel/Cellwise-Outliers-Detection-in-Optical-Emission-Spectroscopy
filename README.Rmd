@@ -39,7 +39,7 @@ wavelength_var <- bc_spec %>%
 ```
 
 ```{r plotSpec function, include=FALSE}
-plotScpec <- function(data) {
+plotSpec <- function(data) {
   data %>%
   select(supplier_id, spectra_id, all_of(wavelength_var)) %>%
   pivot_longer(
@@ -66,17 +66,104 @@ norm_spec <- bc_spec %>%
 ```
 
 ```{r}
-plot1 <- plotScpec(data = bc_spec)
-plot2 <- plotScpec(data = norm_spec) + labs(y = "Normalized intensity")
+plot1 <- plotSpec(data = bc_spec)
+plot2 <- plotSpec(data = norm_spec) + labs(y = "Normalized intensity")
 ```
 
 ```{r}
 plot1 / plot2
 ```
 
+```{r ROBPCA, include=FALSE}
+set.seed(010)
+robpca_mod <- norm_spec %>%
+  select(all_of(wavelength_var)) %>%
+  scale(center = TRUE, scale = FALSE) %>%
+  as.matrix() %>%
+  rospca::robpca(
+    k = 0,
+    kmax = 5,
+    alpha = 0.75,
+    h = NULL,
+    mcd = FALSE,
+    ndir = 5000,
+    skew = TRUE
+    )
 
+j_eig <- pluck(robpca_mod, "eigenvalues")
+j <- length(j_eig)
 
+robpca_eig <- matrix(nrow = 1, ncol = j)
+  for (i in 1:j) {
+    robpca_eig[, i] <- j_eig[i] / sum(j_eig)
+  }
+```
 
+```{r Hotelling ellipse, include=FALSE}
+conf_ellipse <- norm_spec %>%
+  select(supplier_id, spectra_id) %>%
+  bind_cols(pluck(robpca_mod, "scores") %>% as_tibble()) %>%
+  select(PC1:PC3) %>%
+  ellipseParam(k = 2, pcx = 1, pcy = 2)
+```
+
+```{r plot3 , include=FALSE}
+plot3 <- norm_spec %>%
+  select(supplier_id, spectra_id) %>%
+  bind_cols(pluck(robpca_mod, "scores") %>% as_tibble()) %>%
+  ggplot(aes(x = PC1, y = PC2)) +
+  ggforce::geom_ellipse(
+    aes(
+      x0 = 0, y0 = 0, 
+      a = pluck(conf_ellipse, "Ellipse", "a.95pct"), 
+      b = pluck(conf_ellipse, "Ellipse", "b.95pct"), 
+      angle = 0), 
+    size = .2, linetype = "solid", fill = "white") +
+  geom_point(alpha = 2/5, shape = 21, size = 3, fill = "darkblue") +
+  geom_hline(yintercept = 0, linetype = "dashed", size = 0.2) +
+  geom_vline(xintercept = 0, linetype = "dashed", size = 0.2) +
+  labs(x = "t1 [69.1%]", y = "t2 [19.8 %]") +
+  theme_grey() +
+  theme(
+    legend.position = "none",
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold")
+    )
+```
+
+```{r plot4, include=FALSE}
+plot4 <- norm_spec %>%
+  select(supplier_id, spectra_id) %>%
+  bind_cols(
+    tibble(
+      sd = pluck(robpca_mod, "sd"), 
+      od = pluck(robpca_mod, "od")
+      )
+    ) %>%
+  ggplot(aes(x = sd, y = od)) +
+  geom_point(alpha = 2/5, shape = 21, size = 3, fill = "darkblue") +
+  geom_hline(
+    yintercept = pluck(robpca_mod, "cutoff.od"), 
+    linetype = "solid", color = "red", size = 0.2) +
+  geom_vline(
+    xintercept = pluck(robpca_mod, "cutoff.sd"), 
+    linetype = "solid", color = "red", size = 0.2) +
+  labs(x = "Score distance", y = "Orthogonal distance") +
+  theme_grey() +
+  theme(
+    legend.position = "none",
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold")
+    )
+```
+
+```{r}
+plot3 / plot4
+```
 
 
 

@@ -16,8 +16,8 @@ bc_spec <- arrow::read_parquet("bc_spec.parquet")
 ```
 
 ``` r
-plot1 <- plotScpec(data = bc_spec)
-plot2 <- plotScpec(data = norm_spec) + labs(y = "Normalized intensity")
+plot1 <- plotSpec(data = bc_spec)
+plot2 <- plotSpec(data = norm_spec) + labs(y = "Normalized intensity")
 ```
 
 ``` r
@@ -25,3 +25,9 @@ plot1 / plot2
 ```
 
 ![](README_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+
+``` r
+plot3 / plot4
+```
+
+![](README_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->

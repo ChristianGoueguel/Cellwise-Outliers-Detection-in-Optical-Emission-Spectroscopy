@@ -121,7 +121,11 @@ bc_spec %>% as_tibble() %>% head(5)
 ```
 
 ```{r}
-plotScpec <- function(data) {
+arrow::write_parquet(bc_spec, "bc_spec.parquet")
+```
+
+```{r}
+plotSpec <- function(data) {
   data %>%
   select(supplier_id, spectra_id, all_of(wavelength_var)) %>%
   pivot_longer(
@@ -141,7 +145,7 @@ plotScpec <- function(data) {
 ```
 
 ```{r}
-plotScpec(data = bc_spec)
+plotSpec(data = bc_spec)
 ```
 
 ```{r}
@@ -152,7 +156,7 @@ norm_spec <- bc_spec %>%
 ```
 
 ```{r}
-plotScpec(data = norm_spec) + labs(y = "Normalized intensity")
+plotSpec(data = norm_spec) + labs(y = "Normalized intensity")
 ```
 
 ```{r}
@@ -198,57 +202,60 @@ tibble(
 ```
 
 ```{r}
+conf_ellipse <- norm_spec %>%
+  select(supplier_id, spectra_id) %>%
+  bind_cols(pluck(robpca_mod, "scores") %>% as_tibble()) %>%
+  select(PC1:PC3) %>%
+  ellipseParam(k = 2, pcx = 1, pcy = 2)
+```
+
+```{r}
+a <- pluck(conf_ellipse, "Ellipse", "a.95pct")
+b <- pluck(conf_ellipse, "Ellipse", "b.95pct")
+```
+
+```{r}
 norm_spec %>%
-    select(supplier_id, spectra_id, analysis_date) %>%
-    bind_cols(pluck(robpca_mod, "scores") %>% as_tibble()) %>%
-    ggplot() +
-    aes(
-      x = PC1, y = PC2, fill = analysis_date, 
-      text = paste("Spec:", spectra_id, "\n", "Sample:", supplier_id)) +
-    scale_fill_viridis_c(option = "viridis") +
-    geom_point(alpha = 1, shape = 21, size = 3, color = "black") +
-    geom_hline(
-      yintercept = 0, linetype = "solid", 
-      color = "black", size = 0.2) +
-    geom_vline(
-      xintercept = 0, linetype = "solid", 
-      color = "black", size = 0.2)+
-    geom_rug(
-      stat = "identity", size = 0.3, alpha = 1/5, 
-      colour = "#08306b", position = "jitter") +
-    theme_bw() +
-    theme(
-      legend.position = "none",
-      panel.grid.major = element_blank(), 
-      panel.grid.minor = element_blank(),
-      axis.title.x = element_text(face = "bold"),
-      axis.title.y = element_text(face = "bold")
+  select(supplier_id, spectra_id) %>%
+  bind_cols(pluck(robpca_mod, "scores") %>% as_tibble()) %>%
+  ggplot(aes(x = PC1, y = PC2)) +
+  ggforce::geom_ellipse(aes(x0 = 0, y0 = 0, a = a, b = b, angle = 0), size = .2, linetype = "solid", fill = "white") +
+  geom_point(alpha = 2/5, shape = 21, size = 3, fill = "darkblue") +
+  geom_hline(yintercept = 0, linetype = "dashed", size = 0.2) +
+  geom_vline(xintercept = 0, linetype = "dashed", size = 0.2) +
+  labs(x = "t1 [69.1%]", y = "t2 [19.8 %]") +
+  theme_grey() +
+  theme(
+    legend.position = "none",
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold")
     )
 ```
 
 ```{r}
 norm_spec %>%
-  select(supplier_id, spectra_id, analysis_date) %>%
+  select(supplier_id, spectra_id) %>%
   bind_cols(
-    tibble(
-      sd =pluck(robpca_mod, "sd"), 
-      od = pluck(robpca_mod, "od"))
+    tibble(sd = pluck(robpca_mod, "sd"), od = pluck(robpca_mod, "od"))
     ) %>%
-    ggplot(aes(x = sd, y = od, fill = analysis_date)) +
-    scale_fill_viridis_c(option = "viridis") +
-    geom_point(alpha = 1, shape = 21, size = 3, color = "black") +
-    geom_hline(
-      yintercept = pluck(robpca_mod, "cutoff.od"), 
-      linetype = "solid", color = "red", size = 0.2) +
-    geom_vline(
-      xintercept = pluck(robpca_mod, "cutoff.sd"), 
-      linetype = "solid", color = "red", size = 0.2) +
-    labs(x = "Score distance", y = "Orthogonal distance") +
-    theme_bw() +
-    theme(
-      legend.position = "none", 
-      axis.title.x = element_text(face = "bold"),
-      axis.title.y = element_text(face = "bold")
+  ggplot(aes(x = sd, y = od)) +
+  geom_point(alpha = 2/5, shape = 21, size = 3, fill = "darkblue") +
+  geom_hline(
+    yintercept = pluck(robpca_mod, "cutoff.od"), 
+    linetype = "solid", color = "red", size = 0.2) +
+  geom_vline(
+    xintercept = pluck(robpca_mod, "cutoff.sd"), 
+    linetype = "solid", color = "red", size = 0.2) +
+  labs(x = "Score distance", y = "Orthogonal distance") +
+  theme_grey() +
+  theme(
+    legend.position = "none",
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold")
     )
 ```
 
