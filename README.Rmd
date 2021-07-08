@@ -11,14 +11,14 @@ knitr::opts_chunk$set(
 )
 ```
 
-# Cellwise-Outliers-Detection-in-Optical-Emission-Spectroscopy
+# Cellwise Outliers Detection in Optical Emission Spectroscopy: An Overview of MacroPCA
 
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of Cellwise-Outliers-Detection-in-Optical-Emission-Spectroscopy is to ...
+Rowwise outliers detection is the most common actions most spectroscopists and chemometricians take to deal with discordant reading. However, alternative method such as MacroPCA enables to account for cellwise outliers in spectroscopic analysis.
 
-```{r}
+```{r libraries, include=FALSE}
 ssh = suppressPackageStartupMessages
 ssh(library(tidyverse))
 ssh(library(magrittr))
@@ -31,14 +31,14 @@ library(patchwork)
 bc_spec <- arrow::read_parquet("bc_spec.parquet")
 ```
 
-```{r}
+```{r wavelength_var, include=FALSE}
 wavelength_var <- bc_spec %>%
   select(-c(qr_code:timestamp)) %>%
   names() %>%
   as.character()
 ```
 
-```{r}
+```{r plotSpec function, include=FALSE}
 plotScpec <- function(data) {
   data %>%
   select(supplier_id, spectra_id, all_of(wavelength_var)) %>%
@@ -58,11 +58,7 @@ plotScpec <- function(data) {
 }
 ```
 
-```{r}
-plot1 <- plotScpec(data = bc_spec)
-```
-
-```{r}
+```{r normalization, include=FALSE}
 norm_spec <- bc_spec %>%
   select(all_of(wavelength_var)) %>%
   mutate(across(.cols = everything(), .fns = ~.x/`247.8433039`)) %>%
@@ -70,6 +66,7 @@ norm_spec <- bc_spec %>%
 ```
 
 ```{r}
+plot1 <- plotScpec(data = bc_spec)
 plot2 <- plotScpec(data = norm_spec) + labs(y = "Normalized intensity")
 ```
 
