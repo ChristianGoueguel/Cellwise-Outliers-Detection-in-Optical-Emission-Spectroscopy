@@ -175,9 +175,9 @@ robpca_mod <- norm_spec %>%
     skew = TRUE
     )
 
-j_eig <- robpca_mod %>% pluck("eigenvalues")
-  j <- length(j_eig)
-  robpca_eig <- matrix(nrow = 1, ncol = j)
+j_eig <- pluck(robpca_mod, "eigenvalues")
+j <- length(j_eig)
+robpca_eig <- matrix(nrow = 1, ncol = j)
   for (i in 1:j) {
     robpca_eig[, i] <- j_eig[i] / sum(j_eig)
   }
@@ -259,8 +259,134 @@ norm_spec %>%
     )
 ```
 
+```{r}
+macroPCA_mod <- norm_spec %>%
+  select(all_of(wavelength_var)) %>%
+  as.matrix() %>%
+  cellWise::MacroPCA(
+    k = 157, 
+    MacroPCApars = list(
+      DDCpars = list(
+        precScale = 1e-12,
+        tolProb = 0.99,
+        corrlim = .5,
+        combinRule = "wmean",
+        returnBigXimp = FALSE,
+        silent = FALSE,
+        nLocScale = 0,
+        fastDDC = TRUE,
+        transFun = "wrap",
+        nbngbrs = 100
+        ), 
+      kmax = 200, 
+      alpha = .5,
+      scale = TRUE,
+      maxdir = 5000,
+      distprob = 0.99,
+      silent = 20,
+      tol = .005,
+      bigOutput = FALSE
+      )
+    )
+```
 
+```{r}
+j_eig <- pluck(macroPCA_mod, "eigenvalues")
+j <- length(j_eig)
+macroPCA_eig <- matrix(nrow = 1, ncol = j)
+  for (i in 1:j) {
+    macroPCA_eig[, i] <- j_eig[i] / sum(j_eig)
+  }
+```
 
+```{r}
+tibble(
+  components = seq(1, j), 
+  variance = t(macroPCA_eig*100)
+  ) %>%
+  ggplot() +
+  geom_col(aes(x = components, y = variance), fill = "#17456E", colour = "black", position = "dodge") +
+  geom_text(aes(x = components, y = variance, label = paste0(signif(variance, digits = 3), "%")), nudge_x = 0.1, nudge_y = 1) +
+  xlim(1, 10) +
+  ylim(0, 15) +
+  labs(x = "Principal component", y = "Percent explained variance")
+```
+
+```{r}
+spec_rem <- macroPCA_mod[["remX"]] %>% 
+  as_tibble() %>%
+  bind_cols(select(norm_spec, supplier_id, spectra_id), .)
+```
+
+```{r}
+spec_rem %>%
+  pivot_longer(
+    cols = !c(supplier_id, spectra_id),
+    names_to = "wavelength",
+    values_to = "intensity"
+    ) %>%
+  mutate(wavelength = str_remove(wavelength, "^X")) %>%
+  modify_at("wavelength", as.numeric) %>%
+  ggplot(aes(x = wavelength, y = intensity)) +
+  geom_line(aes(color = supplier_id, group = spectra_id)) +
+  labs(x = "Wavelength [nm]", y = "Normalized intensity") +
+  theme(
+    legend.position = "none",
+    axis.line = element_line(colour = "grey50", size = 1)
+    )
+```
+
+```{r}
+cellWise::cellMap(
+  D = macroPCA_mod %>% pluck("remX"),
+  R = macroPCA_mod %>% pluck("stdResid"), 
+  indcells = macroPCA_mod %>% pluck("indcells"), 
+  indrows = macroPCA_mod %>% pluck("indrows"),
+  showVals = NULL,
+  rowlabels = paste0("s", 1:nrow(norm_spec)),
+  columnlabels = 1:7120,
+  rowtitle = "",
+  columntitle = "",
+  nrowsinblock = 5, 
+  ncolumnsinblock = 10,
+  adjustcolumnlabels = 0.5,
+  sizetitles = 1,
+  colContrast = 1.25,
+  outlyingGrad = TRUE,
+  drawCircles = FALSE
+  ) +
+  coord_fixed(ratio = 5) +
+  labs(x = "Wavelength [nm]") +
+  theme_light(base_size = 8) +
+  theme(
+    legend.position = "none",
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank()
+    )
+```
+
+```{r}
+tibble(
+  sd = pluck(macroPCA_mod, "SD"), 
+  od = pluck(macroPCA_mod, "OD")
+  ) %>%
+  ggplot(aes(x = sd, y = od)) +
+  geom_point(alpha = 2/5, shape = 21, size = 3, fill = "darkblue") +
+  geom_hline(yintercept = pluck(macroPCA_mod , "cutoffOD"), 
+             linetype = "solid", color = "red", size = 0.2) +
+  geom_vline(xintercept = pluck(macroPCA_mod , "cutoffSD"), 
+             linetype = "solid", color = "red", size = 0.2) +
+  labs(x = "Score distance", y = "Orthogonal distance") +
+  theme_grey() +
+  theme(
+    legend.position = "none",
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold")
+    )
+```
 
 
 
