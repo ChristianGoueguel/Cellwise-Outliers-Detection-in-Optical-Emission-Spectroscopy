@@ -259,6 +259,71 @@ norm_spec %>%
     )
 ```
 
+
+```{r}
+ROBPCAindrows <- which(robpca_mod$od > robpca_mod$cutoff.od)
+```
+
+```{r}
+Xhat <- sweep(robpca_mod$scores %*% t(robpca_mod$loadings), 2, robpca_mod$center, "+")
+```
+
+```{r}
+rem_cranberry <- norm_spec %>%
+  select(all_of(wavelength_var)) %>%
+  scale(center = TRUE, scale = FALSE) %>%
+  as.matrix()
+```
+
+```{r}
+Xresid <- rem_cranberry - Xhat
+```
+
+```{r}
+scaleRes <- cellWise::estLocScale(Xresid, type = "1stepM", center = F)$scale
+```
+
+```{r}
+stdResidROBPCA <- sweep(Xresid, 2, scaleRes, "/")
+```
+
+```{r}
+# Univariate outlier detection indicates outlying cells:
+cutoffResid <- sqrt(qchisq(0.99, df = 1))
+ROBPCAindcells <- which(abs(stdResidROBPCA) > cutoffResid)
+```
+
+```{r}
+cellWise::cellMap(
+  D = rem_cranberry,
+  R = stdResidROBPCA,
+  indcells = ROBPCAindcells,
+  indrows = ROBPCAindrows,
+  showVals = NULL,
+  rowlabels = paste0("s", 1:nrow(rem_cranberry)),
+  columnlabels = NULL,
+  rowtitle = "",                       
+  columntitle = "",
+  nrowsinblock = 5,
+  ncolumnsinblock = 10,
+  adjustcolumnlabels = 0.5,
+  sizetitles = 1,
+  colContrast = 1,
+  outlyingGrad = TRUE,
+  drawCircles = FALSE
+  ) +
+  coord_fixed(ratio = 5) +
+  labs(title = "ROBPCA Residual Map", x = "Wavelength [nm]") +
+  theme_light(base_size = 8) +
+  theme(
+    legend.position = "none",
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank()
+    )
+```
+
+
 ```{r}
 macroPCA_mod <- norm_spec %>%
   select(all_of(wavelength_var)) %>%
@@ -319,6 +384,14 @@ spec_rem <- macroPCA_mod[["remX"]] %>%
 ```
 
 ```{r}
+wavelength <- spec_rem %>%
+  select(starts_with("X")) %>%
+  names() %>%
+  as.character() %>%
+  str_remove("^X")
+```
+
+```{r}
 spec_rem %>%
   pivot_longer(
     cols = !c(supplier_id, spectra_id),
@@ -344,19 +417,19 @@ cellWise::cellMap(
   indrows = macroPCA_mod %>% pluck("indrows"),
   showVals = NULL,
   rowlabels = paste0("s", 1:nrow(norm_spec)),
-  columnlabels = 1:7120,
+  columnlabels = round(as.numeric(wavelength), 2),
   rowtitle = "",
   columntitle = "",
   nrowsinblock = 5, 
   ncolumnsinblock = 10,
   adjustcolumnlabels = 0.5,
   sizetitles = 1,
-  colContrast = 1.25,
+  colContrast = 1,
   outlyingGrad = TRUE,
   drawCircles = FALSE
   ) +
   coord_fixed(ratio = 5) +
-  labs(x = "Wavelength [nm]") +
+  labs(title = "MacroPCA Residual Map", x = "Wavelength [nm]") +
   theme_light(base_size = 8) +
   theme(
     legend.position = "none",
@@ -388,6 +461,13 @@ tibble(
     )
 ```
 
+```{r}
+cellWise::outlierMap(
+  macroPCA_mod, 
+  title = "MacroPCA outlier map", 
+  labelOut = TRUE
+  )
+```
 
 
 

@@ -42,7 +42,7 @@ wavelength_var <- bc_spec %>%
   as.character()
 ```
 
-```{r plotSpec function, include=FALSE}
+```{r plotSpec function}
 plotSpec <- function(data) {
   data %>%
   select(supplier_id, spectra_id, all_of(wavelength_var)) %>%
@@ -103,71 +103,188 @@ robpca_eig <- matrix(nrow = 1, ncol = j)
   }
 ```
 
-```{r Hotelling ellipse, include=FALSE}
+```{r Hotelling ellipse}
 conf_ellipse <- norm_spec %>%
   select(supplier_id, spectra_id) %>%
   bind_cols(pluck(robpca_mod, "scores") %>% as_tibble()) %>%
-  select(PC1:PC3) %>%
+  select(PC1:PC2) %>%
   ellipseParam(k = 2, pcx = 1, pcy = 2)
 ```
 
-```{r plot3 , include=FALSE}
+```{r plot3}
 plot3 <- norm_spec %>%
   select(supplier_id, spectra_id) %>%
   bind_cols(pluck(robpca_mod, "scores") %>% as_tibble()) %>%
   ggplot(aes(x = PC1, y = PC2)) +
-  ggforce::geom_ellipse(
-    aes(
-      x0 = 0, y0 = 0, 
-      a = pluck(conf_ellipse, "Ellipse", "a.95pct"), 
-      b = pluck(conf_ellipse, "Ellipse", "b.95pct"), 
-      angle = 0), 
-    size = .2, linetype = "solid", fill = "white") +
-  geom_point(alpha = 2/5, shape = 21, size = 3, fill = "darkblue") +
+  ggforce::geom_ellipse(aes(x0 = 0, y0 = 0, a = pluck(conf_ellipse, "Ellipse", "a.99pct"), b = pluck(conf_ellipse, "Ellipse", "b.99pct"), angle = 0), size = .2, linetype = "solid", fill = "white") +
+  geom_point(alpha = 2/5, shape = 21, size = 3, fill = "darkgreen") +
   geom_hline(yintercept = 0, linetype = "dashed", size = 0.2) +
   geom_vline(xintercept = 0, linetype = "dashed", size = 0.2) +
-  labs(x = "t1 [69.1%]", y = "t2 [19.8 %]") +
-  theme_grey() +
-  theme(
-    legend.position = "none",
-    panel.grid.major = element_blank(), 
-    panel.grid.minor = element_blank(),
-    axis.title.x = element_text(face = "bold"),
-    axis.title.y = element_text(face = "bold")
-    )
+  labs(subtitle = "ROBPCA Scores", x = "t1 [69.1%]", y = "t2 [19.8 %]") +
+  theme_grey(base_size = 10) +
+  theme(legend.position = "none")
 ```
 
-```{r plot4, include=FALSE}
+```{r plot4}
 plot4 <- norm_spec %>%
   select(supplier_id, spectra_id) %>%
-  bind_cols(
-    tibble(
-      sd = pluck(robpca_mod, "sd"), 
-      od = pluck(robpca_mod, "od")
-      )
-    ) %>%
+  bind_cols(tibble(sd = pluck(robpca_mod, "sd"), od = pluck(robpca_mod, "od"))) %>%
   ggplot(aes(x = sd, y = od)) +
-  geom_point(alpha = 2/5, shape = 21, size = 3, fill = "darkblue") +
-  geom_hline(
-    yintercept = pluck(robpca_mod, "cutoff.od"), 
-    linetype = "solid", color = "red", size = 0.2) +
-  geom_vline(
-    xintercept = pluck(robpca_mod, "cutoff.sd"), 
-    linetype = "solid", color = "red", size = 0.2) +
-  labs(x = "Score distance", y = "Orthogonal distance") +
-  theme_grey() +
+  geom_point(alpha = 2/5, shape = 21, size = 3, fill = "darkgreen") +
+  geom_hline(yintercept = pluck(robpca_mod, "cutoff.od"), linetype = "solid", color = "red", size = 0.3) +
+  geom_vline(xintercept = pluck(robpca_mod, "cutoff.sd"), linetype = "solid", color = "red", size = 0.3) +
+  labs(subtitle = "ROBPCA Outliers Map", x = "Score distance", y = "Orthogonal distance") +
+  theme(legend.position = "none")
+```
+
+```{r fig.height=6, fig.width=5}
+plot3 / plot4 
+```
+
+```{r}
+ROBPCAindrows <- which(robpca_mod$od > robpca_mod$cutoff.od)
+Xhat <- sweep(robpca_mod$scores %*% t(robpca_mod$loadings), 2, robpca_mod$center, "+")
+```
+
+```{r}
+rem_cranberry <- norm_spec %>%
+  select(all_of(wavelength_var)) %>%
+  scale(center = TRUE, scale = FALSE) %>%
+  as.matrix()
+```
+
+```{r}
+Xresid <- rem_cranberry - Xhat
+scaleRes <- cellWise::estLocScale(Xresid, type = "1stepM", center = F)$scale
+stdResidROBPCA <- sweep(Xresid, 2, scaleRes, "/")
+
+```
+
+```{r}
+cutoffResid <- sqrt(qchisq(0.99, df = 1))
+ROBPCAindcells <- which(abs(stdResidROBPCA) > cutoffResid)
+```
+
+```{r plot5, include=FALSE}
+plot5 <- cellWise::cellMap(
+  D = rem_cranberry,
+  R = stdResidROBPCA,
+  indcells = ROBPCAindcells,
+  indrows = ROBPCAindrows,
+  showVals = NULL,
+  rowlabels = paste0("s", 1:nrow(rem_cranberry)),
+  columnlabels = NULL,
+  rowtitle = "",                       
+  columntitle = "",
+  nrowsinblock = 5,
+  ncolumnsinblock = 10,
+  adjustcolumnlabels = 0.5,
+  sizetitles = 1,
+  colContrast = 1.2,
+  outlyingGrad = TRUE,
+  drawCircles = FALSE
+  ) +
+  coord_fixed(ratio = 5) +
+  labs(title = "ROBPCA Residual Map", x = "Wavelength [nm]") +
+  theme_light(base_size = 8) +
   theme(
     legend.position = "none",
     panel.grid.major = element_blank(), 
     panel.grid.minor = element_blank(),
-    axis.title.x = element_text(face = "bold"),
-    axis.title.y = element_text(face = "bold")
+    axis.text.x = element_blank()
     )
 ```
 
-```{r fig.height=3, fig.width=10}
-plot3 | plot4
+
+```{r macroPCA_mod, include=FALSE}
+macroPCA_mod <- norm_spec %>%
+  select(all_of(wavelength_var)) %>%
+  as.matrix() %>%
+  cellWise::MacroPCA(
+    k = 157, 
+    MacroPCApars = list(
+      DDCpars = list(
+        precScale = 1e-12,
+        tolProb = 0.99,
+        corrlim = .5,
+        combinRule = "wmean",
+        returnBigXimp = FALSE,
+        silent = FALSE,
+        nLocScale = 0,
+        fastDDC = TRUE,
+        transFun = "wrap",
+        nbngbrs = 100
+        ), 
+      kmax = 200, 
+      alpha = .5,
+      scale = TRUE,
+      maxdir = 5000,
+      distprob = 0.99,
+      silent = 20,
+      tol = .005,
+      bigOutput = FALSE
+      )
+    )
 ```
+
+```{r include=FALSE}
+j_eig <- pluck(macroPCA_mod, "eigenvalues")
+j <- length(j_eig)
+macroPCA_eig <- matrix(nrow = 1, ncol = j)
+  for (i in 1:j) {
+    macroPCA_eig[, i] <- j_eig[i] / sum(j_eig)
+  }
+```
+
+```{r include=FALSE}
+spec_rem <- macroPCA_mod[["remX"]] %>% 
+  as_tibble() %>%
+  bind_cols(select(norm_spec, supplier_id, spectra_id), .)
+```
+
+```{r include=FALSE}
+wavelength <- spec_rem %>%
+  select(starts_with("X")) %>%
+  names() %>%
+  as.character() %>%
+  str_remove("^X")
+```
+
+```{r plot6, include=FALSE}
+plot6 <- cellWise::cellMap(
+  D = macroPCA_mod %>% pluck("remX"),
+  R = macroPCA_mod %>% pluck("stdResid"), 
+  indcells = macroPCA_mod %>% pluck("indcells"), 
+  indrows = macroPCA_mod %>% pluck("indrows"),
+  showVals = NULL,
+  rowlabels = paste0("s", 1:nrow(norm_spec)),
+  columnlabels = round(as.numeric(wavelength), 2),
+  rowtitle = "",
+  columntitle = "",
+  nrowsinblock = 5, 
+  ncolumnsinblock = 10,
+  adjustcolumnlabels = 0.5,
+  sizetitles = 1,
+  colContrast = 1.2,
+  outlyingGrad = TRUE,
+  drawCircles = FALSE
+  ) +
+  coord_fixed(ratio = 5) +
+  labs(title = "MacroPCA Residual Map", x = "Wavelength [nm]") +
+  theme_light(base_size = 8) +
+  theme(
+    legend.position = "none",
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank()
+    )
+```
+
+```{r fig.height=15, fig.width=13}
+plot5 / plot6
+```
+
+
 
 
 
