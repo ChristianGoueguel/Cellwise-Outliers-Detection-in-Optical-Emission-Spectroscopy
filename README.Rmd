@@ -9,8 +9,6 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
   fig.path = "man/figures/README-",
-  out.width = "100%",
-  out.height = "100%",
   fig.retina = 2
 )
 ```
@@ -78,11 +76,11 @@ plot1 <- plotSpec(data = bc_spec)
 plot2 <- plotSpec(data = norm_spec) + labs(y = "Normalized intensity")
 ```
 
-```{r}
+```{r out.width="90%", out.height="90%"}
 plot1 / plot2
 ```
 
-## ROBPCA method
+### ROBPCA method
 
 We first performed ROBPCA for detecting rowwise outliers. 
 
@@ -147,14 +145,14 @@ plot4 <- norm_spec %>%
   theme(legend.position = "none")
 ```
 
-```{r fig.height=5, fig.width=4}
+```{r fig.height=4, fig.width=3, out.width="60%", out.height="60%"}
 plot3 / plot4 
 ```
 
-## Comparing ROBPCA and MacroPCA methods
+### Comparing ROBPCA and MacroPCA methods
 
 The best way to compare the two methods is to plot their respective cellMap.
-A cellmap is a powerful display of cells that are unusual. More specifically, unusually large cell values are colored in red whilst unusually low cell values are colored in blue. Moreover, a large number of unusual cells values on a single row will tend to contaminate the entire row making the observation an outlier.
+A cellmap is a powerful display of cells that are unusual. More specifically, unusually large cell values are colored in red whilst unusually low cell values are colored in blue. Moreover, a large number of unusual cells values on a single row will tend to contaminate the entire row making the observation flagged as an outlier.
 
 ```{r}
 ROBPCAindrows <- which(robpca_mod$od > robpca_mod$cutoff.od)
@@ -180,7 +178,7 @@ cutoffResid <- sqrt(qchisq(0.99, df = 1))
 ROBPCAindcells <- which(abs(stdResidROBPCA) > cutoffResid)
 ```
 
-```{r plot5}
+```{r plot5, message=FALSE, warning=FALSE}
 plot5 <- cellWise::cellMap(
   D = rem_cranberry,
   R = stdResidROBPCA,
@@ -200,7 +198,7 @@ plot5 <- cellWise::cellMap(
   drawCircles = FALSE
   ) +
   coord_fixed(ratio = 5) +
-  labs(title = "ROBPCA Residual Map", x = "Wavelength [nm]") +
+  labs(title = "ROBPCA Residual Map", x = "Wavelength [nm]", y = "Plant Sample") +
   theme_light(base_size = 8) +
   theme(
     legend.position = "none",
@@ -210,7 +208,7 @@ plot5 <- cellWise::cellMap(
     )
 ```
 
-```{r macroPCA_mod, include=FALSE}
+```{r macroPCA_mod, message=FALSE, warning=FALSE, include=FALSE}
 macroPCA_mod <- norm_spec %>%
   select(all_of(wavelength_var)) %>%
   as.matrix() %>%
@@ -264,7 +262,7 @@ wavelength <- spec_rem %>%
   str_remove("^X")
 ```
 
-```{r plot6}
+```{r plot6, message=FALSE, warning=FALSE}
 plot6 <- cellWise::cellMap(
   D =  pluck(macroPCA_mod, "remX"),
   R = pluck(macroPCA_mod, "stdResid"), 
@@ -284,7 +282,7 @@ plot6 <- cellWise::cellMap(
   drawCircles = FALSE
   ) +
   coord_fixed(ratio = 5) +
-  labs(title = "MacroPCA Residual Map", x = "Wavelength [nm]") +
+  labs(title = "MacroPCA Residual Map", x = "Wavelength [nm]", y = "Plant Sample") +
   theme_light(base_size = 8) +
   theme(
     legend.position = "none",
@@ -294,7 +292,7 @@ plot6 <- cellWise::cellMap(
     )
 ```
 
-```{r fig.height=15, fig.width=13}
+```{r fig.height=15, fig.width=13, out.width="150%", out.height="150%"}
 plot5 / plot6
 ```
 

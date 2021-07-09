@@ -54,9 +54,9 @@ plot2 <- plotSpec(data = norm_spec) + labs(y = "Normalized intensity")
 plot1 / plot2
 ```
 
-<img src="man/figures/README-unnamed-chunk-4-1.png" width="100%" height="100%" />
+<img src="man/figures/README-unnamed-chunk-4-1.png" width="90%" height="90%" />
 
-## ROBPCA method
+### ROBPCA method
 
 We first performed ROBPCA for detecting rowwise outliers.
 
@@ -115,16 +115,16 @@ plot4 <- norm_spec %>%
 plot3 / plot4 
 ```
 
-<img src="man/figures/README-unnamed-chunk-6-1.png" width="100%" height="100%" />
+<img src="man/figures/README-unnamed-chunk-6-1.png" width="60%" height="60%" />
 
-## Comparing ROBPCA and MacroPCA methods
+### Comparing ROBPCA and MacroPCA methods
 
 The best way to compare the two methods is to plot their respective
 cellMap. A cellmap is a powerful display of cells that are unusual. More
 specifically, unusually large cell values are colored in red whilst
 unusually low cell values are colored in blue. Moreover, a large number
 of unusual cells values on a single row will tend to contaminate the
-entire row making the observation an outlier.
+entire row making the observation flagged as an outlier.
 
 ``` r
 ROBPCAindrows <- which(robpca_mod$od > robpca_mod$cutoff.od)
@@ -171,7 +171,7 @@ plot5 <- cellWise::cellMap(
   drawCircles = FALSE
   ) +
   coord_fixed(ratio = 5) +
-  labs(title = "ROBPCA Residual Map", x = "Wavelength [nm]") +
+  labs(title = "ROBPCA Residual Map", x = "Wavelength [nm]", y = "Plant Sample") +
   theme_light(base_size = 8) +
   theme(
     legend.position = "none",
@@ -179,7 +179,6 @@ plot5 <- cellWise::cellMap(
     panel.grid.minor = element_blank(),
     axis.text.x = element_blank()
     )
-#> Coordinate system already present. Adding new coordinate system, which will replace the existing one.
 ```
 
 ``` r
@@ -202,7 +201,7 @@ plot6 <- cellWise::cellMap(
   drawCircles = FALSE
   ) +
   coord_fixed(ratio = 5) +
-  labs(title = "MacroPCA Residual Map", x = "Wavelength [nm]") +
+  labs(title = "MacroPCA Residual Map", x = "Wavelength [nm]", y = "Plant Sample") +
   theme_light(base_size = 8) +
   theme(
     legend.position = "none",
@@ -210,11 +209,10 @@ plot6 <- cellWise::cellMap(
     panel.grid.minor = element_blank(),
     axis.text.x = element_blank()
     )
-#> Coordinate system already present. Adding new coordinate system, which will replace the existing one.
 ```
 
 ``` r
 plot5 / plot6
 ```
 
-<img src="man/figures/README-unnamed-chunk-14-1.png" width="100%" height="100%" />
+<img src="man/figures/README-unnamed-chunk-14-1.png" width="150%" height="150%" />
