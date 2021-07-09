@@ -9,8 +9,8 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
   fig.path = "man/figures/README-",
-  out.width = "90%",
-  out.height = "90%",
+  out.width = "100%",
+  out.height = "100%",
   fig.retina = 2
 )
 ```
@@ -20,7 +20,7 @@ knitr::opts_chunk$set(
 <!-- badges: start -->
 <!-- badges: end -->
 
-Rowwise outliers detection is the most common actions most spectroscopists and chemometricians take to deal with discordant reading. However, alternative method such as MacroPCA enables to account for cellwise outliers in spectroscopic analysis.
+Rowwise outliers detection is the most common actions most spectroscopists and chemometricians take to deal with discordant reading. However, alternative method such as MacroPCA enables to account for cellwise outliers in spectroscopic analysis. Herein, we compare three robust PCA-based methods namely ROSPCA, ROBPCA and MacroPCA for detecting outliers in laser-induced breakdown spectroscopy (LIBS) spectra of plant tissue samples.
 
 ```{r libraries, include=FALSE}
 ssh = suppressPackageStartupMessages
@@ -30,6 +30,8 @@ library(HotellingEllipse)
 library(data.table)
 library(patchwork)
 ```
+
+Loading of LIBS spectra of various samples of plant materials. Plant samples were cleaned, dried, homogenized and grounded prior LIBS analysis. 
 
 ```{r}
 bc_spec <- arrow::read_parquet("bc_spec.parquet")
@@ -41,6 +43,8 @@ wavelength_var <- bc_spec %>%
   names() %>%
   as.character()
 ```
+
+Visualization of LIBS spectra of plant samples. The spectra have been normalized to reduce pulse-to-pulse fluctuations.
 
 ```{r plotSpec function}
 plotSpec <- function(data) {
@@ -78,7 +82,11 @@ plot2 <- plotSpec(data = norm_spec) + labs(y = "Normalized intensity")
 plot1 / plot2
 ```
 
-```{r ROBPCA, include=FALSE}
+## ROBPCA method
+
+We first performed ROBPCA for detecting rowwise outliers. 
+
+```{r ROBPCA}
 set.seed(010)
 robpca_mod <- norm_spec %>%
   select(all_of(wavelength_var)) %>%
@@ -93,7 +101,9 @@ robpca_mod <- norm_spec %>%
     ndir = 5000,
     skew = TRUE
     )
+```
 
+```{r include=FALSE}
 j_eig <- pluck(robpca_mod, "eigenvalues")
 j <- length(j_eig)
 
@@ -107,8 +117,8 @@ robpca_eig <- matrix(nrow = 1, ncol = j)
 conf_ellipse <- norm_spec %>%
   select(supplier_id, spectra_id) %>%
   bind_cols(pluck(robpca_mod, "scores") %>% as_tibble()) %>%
-  select(PC1:PC2) %>%
-  ellipseParam(k = 2, pcx = 1, pcy = 2)
+  select(PC1, PC2) %>%
+  HotellingEllipse::ellipseParam(k = 2, pcx = 1, pcy = 2)
 ```
 
 ```{r plot3}
@@ -137,9 +147,14 @@ plot4 <- norm_spec %>%
   theme(legend.position = "none")
 ```
 
-```{r fig.height=6, fig.width=5}
+```{r fig.height=5, fig.width=4}
 plot3 / plot4 
 ```
+
+## Comparing ROBPCA and MacroPCA methods
+
+The best way to compare the two methods is to plot their respective cellMap.
+A cellmap is a powerful display of cells that are unusual. More specifically, unusually large cell values are colored in red whilst unusually low cell values are colored in blue. Moreover, a large number of unusual cells values on a single row will tend to contaminate the entire row making the observation an outlier.
 
 ```{r}
 ROBPCAindrows <- which(robpca_mod$od > robpca_mod$cutoff.od)
@@ -165,7 +180,7 @@ cutoffResid <- sqrt(qchisq(0.99, df = 1))
 ROBPCAindcells <- which(abs(stdResidROBPCA) > cutoffResid)
 ```
 
-```{r plot5, include=FALSE}
+```{r plot5}
 plot5 <- cellWise::cellMap(
   D = rem_cranberry,
   R = stdResidROBPCA,
@@ -194,7 +209,6 @@ plot5 <- cellWise::cellMap(
     axis.text.x = element_blank()
     )
 ```
-
 
 ```{r macroPCA_mod, include=FALSE}
 macroPCA_mod <- norm_spec %>%
@@ -250,12 +264,12 @@ wavelength <- spec_rem %>%
   str_remove("^X")
 ```
 
-```{r plot6, include=FALSE}
+```{r plot6}
 plot6 <- cellWise::cellMap(
-  D = macroPCA_mod %>% pluck("remX"),
-  R = macroPCA_mod %>% pluck("stdResid"), 
-  indcells = macroPCA_mod %>% pluck("indcells"), 
-  indrows = macroPCA_mod %>% pluck("indrows"),
+  D =  pluck(macroPCA_mod, "remX"),
+  R = pluck(macroPCA_mod, "stdResid"), 
+  indcells = pluck(macroPCA_mod, "indcells"), 
+  indrows = pluck(macroPCA_mod, "indrows"),
   showVals = NULL,
   rowlabels = paste0("s", 1:nrow(norm_spec)),
   columnlabels = round(as.numeric(wavelength), 2),

@@ -9,11 +9,21 @@
 Rowwise outliers detection is the most common actions most
 spectroscopists and chemometricians take to deal with discordant
 reading. However, alternative method such as MacroPCA enables to account
-for cellwise outliers in spectroscopic analysis.
+for cellwise outliers in spectroscopic analysis. Herein, we compare
+three robust PCA-based methods namely ROSPCA, ROBPCA and MacroPCA for
+detecting outliers in laser-induced breakdown spectroscopy (LIBS)
+spectra of plant tissue samples.
+
+Loading of LIBS spectra of various samples of plant materials. Plant
+samples were cleaned, dried, homogenized and grounded prior LIBS
+analysis.
 
 ``` r
 bc_spec <- arrow::read_parquet("bc_spec.parquet")
 ```
+
+Visualization of LIBS spectra of plant samples. The spectra have been
+normalized to reduce pulse-to-pulse fluctuations.
 
 ``` r
 plotSpec <- function(data) {
@@ -44,14 +54,35 @@ plot2 <- plotSpec(data = norm_spec) + labs(y = "Normalized intensity")
 plot1 / plot2
 ```
 
-<img src="man/figures/README-unnamed-chunk-4-1.png" width="90%" height="90%" />
+<img src="man/figures/README-unnamed-chunk-4-1.png" width="100%" height="100%" />
+
+## ROBPCA method
+
+We first performed ROBPCA for detecting rowwise outliers.
+
+``` r
+set.seed(010)
+robpca_mod <- norm_spec %>%
+  select(all_of(wavelength_var)) %>%
+  scale(center = TRUE, scale = FALSE) %>%
+  as.matrix() %>%
+  rospca::robpca(
+    k = 0,
+    kmax = 5,
+    alpha = 0.75,
+    h = NULL,
+    mcd = FALSE,
+    ndir = 5000,
+    skew = TRUE
+    )
+```
 
 ``` r
 conf_ellipse <- norm_spec %>%
   select(supplier_id, spectra_id) %>%
   bind_cols(pluck(robpca_mod, "scores") %>% as_tibble()) %>%
-  select(PC1:PC2) %>%
-  ellipseParam(k = 2, pcx = 1, pcy = 2)
+  select(PC1, PC2) %>%
+  HotellingEllipse::ellipseParam(k = 2, pcx = 1, pcy = 2)
 ```
 
 ``` r
@@ -84,7 +115,16 @@ plot4 <- norm_spec %>%
 plot3 / plot4 
 ```
 
-<img src="man/figures/README-unnamed-chunk-5-1.png" width="90%" height="90%" />
+<img src="man/figures/README-unnamed-chunk-6-1.png" width="100%" height="100%" />
+
+## Comparing ROBPCA and MacroPCA methods
+
+The best way to compare the two methods is to plot their respective
+cellMap. A cellmap is a powerful display of cells that are unusual. More
+specifically, unusually large cell values are colored in red whilst
+unusually low cell values are colored in blue. Moreover, a large number
+of unusual cells values on a single row will tend to contaminate the
+entire row making the observation an outlier.
 
 ``` r
 ROBPCAindrows <- which(robpca_mod$od > robpca_mod$cutoff.od)
@@ -112,7 +152,69 @@ ROBPCAindcells <- which(abs(stdResidROBPCA) > cutoffResid)
 ```
 
 ``` r
+plot5 <- cellWise::cellMap(
+  D = rem_cranberry,
+  R = stdResidROBPCA,
+  indcells = ROBPCAindcells,
+  indrows = ROBPCAindrows,
+  showVals = NULL,
+  rowlabels = paste0("s", 1:nrow(rem_cranberry)),
+  columnlabels = NULL,
+  rowtitle = "",                       
+  columntitle = "",
+  nrowsinblock = 5,
+  ncolumnsinblock = 10,
+  adjustcolumnlabels = 0.5,
+  sizetitles = 1,
+  colContrast = 1.2,
+  outlyingGrad = TRUE,
+  drawCircles = FALSE
+  ) +
+  coord_fixed(ratio = 5) +
+  labs(title = "ROBPCA Residual Map", x = "Wavelength [nm]") +
+  theme_light(base_size = 8) +
+  theme(
+    legend.position = "none",
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank()
+    )
+#> Coordinate system already present. Adding new coordinate system, which will replace the existing one.
+```
+
+``` r
+plot6 <- cellWise::cellMap(
+  D =  pluck(macroPCA_mod, "remX"),
+  R = pluck(macroPCA_mod, "stdResid"), 
+  indcells = pluck(macroPCA_mod, "indcells"), 
+  indrows = pluck(macroPCA_mod, "indrows"),
+  showVals = NULL,
+  rowlabels = paste0("s", 1:nrow(norm_spec)),
+  columnlabels = round(as.numeric(wavelength), 2),
+  rowtitle = "",
+  columntitle = "",
+  nrowsinblock = 5, 
+  ncolumnsinblock = 10,
+  adjustcolumnlabels = 0.5,
+  sizetitles = 1,
+  colContrast = 1.2,
+  outlyingGrad = TRUE,
+  drawCircles = FALSE
+  ) +
+  coord_fixed(ratio = 5) +
+  labs(title = "MacroPCA Residual Map", x = "Wavelength [nm]") +
+  theme_light(base_size = 8) +
+  theme(
+    legend.position = "none",
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank()
+    )
+#> Coordinate system already present. Adding new coordinate system, which will replace the existing one.
+```
+
+``` r
 plot5 / plot6
 ```
 
-<img src="man/figures/README-unnamed-chunk-13-1.png" width="90%" height="90%" />
+<img src="man/figures/README-unnamed-chunk-14-1.png" width="100%" height="100%" />
