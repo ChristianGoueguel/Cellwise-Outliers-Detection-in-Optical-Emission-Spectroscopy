@@ -14,16 +14,16 @@ three robust PCA-based methods namely ROSPCA, ROBPCA and MacroPCA for
 detecting outliers in laser-induced breakdown spectroscopy (LIBS)
 spectra of plant tissue samples.
 
-Loading of LIBS spectra of various samples of plant materials. Plant
-samples were cleaned, dried, homogenized and grounded prior LIBS
-analysis.
+-   Loading of LIBS spectra of various samples of plant materials. Plant
+    samples were cleaned, dried, homogenized and grounded prior LIBS
+    analysis.
 
 ``` r
 bc_spec <- arrow::read_parquet("bc_spec.parquet")
 ```
 
-Visualization of LIBS spectra of plant samples. The spectra have been
-normalized to reduce pulse-to-pulse fluctuations.
+-   Visualization of LIBS spectra of plant samples. The spectra have
+    been normalized to reduce pulse-to-pulse fluctuations.
 
 ``` r
 plotSpec <- function(data) {
@@ -77,6 +77,8 @@ robpca_mod <- norm_spec %>%
     )
 ```
 
+-   Computing Hotelling ellipse
+
 ``` r
 conf_ellipse <- norm_spec %>%
   select(supplier_id, spectra_id) %>%
@@ -84,6 +86,9 @@ conf_ellipse <- norm_spec %>%
   select(PC1, PC2) %>%
   HotellingEllipse::ellipseParam(k = 2, pcx = 1, pcy = 2)
 ```
+
+-   Visualization of the scores scatterplot and the corresponding
+    outlier map.
 
 ``` r
 plot3 <- norm_spec %>%
@@ -141,8 +146,6 @@ rem_cranberry <- norm_spec %>%
 ``` r
 Xresid <- rem_cranberry - Xhat
 scaleRes <- cellWise::estLocScale(Xresid, type = "1stepM", center = F)$scale
-#> Warning in cellWise::estLocScale(Xresid, type = "1stepM", center = F): 1  out of  7152  variables have an estimated scale <= 
-#> "precScale" =  1e-12 .
 stdResidROBPCA <- sweep(Xresid, 2, scaleRes, "/")
 ```
 
