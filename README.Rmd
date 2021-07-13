@@ -18,9 +18,9 @@ knitr::opts_chunk$set(
 <!-- badges: start -->
 <!-- badges: end -->
 
-Rowwise outliers detection is the most common actions most spectroscopists and chemometricians take to deal with discordant reading. However, alternative method such as MacroPCA enables to account for cellwise outliers in spectroscopic analysis. Herein, we compare three robust PCA-based methods namely ROSPCA, ROBPCA and MacroPCA for detecting outliers in laser-induced breakdown spectroscopy (LIBS) spectra of plant tissue samples.
+Rowwise outliers detection is the most common actions most spectroscopists and chemometricians take to deal with discordant reading. However, alternative method such as MacroPCA enables to account for cellwise outliers in spectroscopic analysis. Herein, we compare two robust PCA-based methods namely ROBPCA and MacroPCA for detecting outliers in laser-induced breakdown spectroscopy (LIBS) spectra of plant tissue samples.
 
-```{r libraries, include=FALSE}
+```{r libraries, message=FALSE, warning=FALSE}
 ssh = suppressPackageStartupMessages
 ssh(library(tidyverse))
 ssh(library(magrittr))
@@ -35,7 +35,7 @@ library(patchwork)
 bc_spec <- arrow::read_parquet("bc_spec.parquet")
 ```
 
-```{r wavelength_var, include=FALSE}
+```{r wavelength_var}
 wavelength_var <- bc_spec %>%
   select(-c(qr_code:timestamp)) %>%
   names() %>%
@@ -64,10 +64,14 @@ plotSpec <- function(data) {
 }
 ```
 
-```{r normalization, include=FALSE}
+```{r reference C line , include=FALSE}
+ref_norm <- bc_spec %>% pull(`247.8433039`)
+```
+
+```{r normalization}
 norm_spec <- bc_spec %>%
   select(all_of(wavelength_var)) %>%
-  mutate(across(.cols = everything(), .fns = ~.x/`247.8433039`)) %>%
+  mutate(across(.cols = everything(), .fns = ~.x/ref_norm)) %>%
   bind_cols(select(bc_spec, -all_of(wavelength_var)), .)
 ```
 
@@ -117,7 +121,7 @@ robpca_eig <- matrix(nrow = 1, ncol = j)
 conf_ellipse <- norm_spec %>%
   select(supplier_id, spectra_id) %>%
   bind_cols(pluck(robpca_mod, "scores") %>% as_tibble()) %>%
-  select(PC1, PC2) %>%
+  select(PC1:PC3) %>%
   HotellingEllipse::ellipseParam(k = 2, pcx = 1, pcy = 2)
 ```
 
@@ -129,7 +133,7 @@ plot3 <- norm_spec %>%
   bind_cols(pluck(robpca_mod, "scores") %>% as_tibble()) %>%
   ggplot(aes(x = PC1, y = PC2)) +
   ggforce::geom_ellipse(aes(x0 = 0, y0 = 0, a = pluck(conf_ellipse, "Ellipse", "a.99pct"), b = pluck(conf_ellipse, "Ellipse", "b.99pct"), angle = 0), size = .2, linetype = "solid", fill = "white") +
-  geom_point(alpha = 2/5, shape = 21, size = 3, fill = "darkgreen") +
+  geom_point(alpha = 2/5, shape = 21, size = 1, fill = "darkgreen") +
   geom_hline(yintercept = 0, linetype = "dashed", size = 0.2) +
   geom_vline(xintercept = 0, linetype = "dashed", size = 0.2) +
   labs(subtitle = "ROBPCA Scores", x = "t1 [69.1%]", y = "t2 [19.8 %]") +
@@ -142,7 +146,7 @@ plot4 <- norm_spec %>%
   select(supplier_id, spectra_id) %>%
   bind_cols(tibble(sd = pluck(robpca_mod, "sd"), od = pluck(robpca_mod, "od"))) %>%
   ggplot(aes(x = sd, y = od)) +
-  geom_point(alpha = 2/5, shape = 21, size = 3, fill = "darkgreen") +
+  geom_point(alpha = 2/5, shape = 21, size = 1, fill = "darkgreen") +
   geom_hline(yintercept = pluck(robpca_mod, "cutoff.od"), linetype = "solid", color = "red", size = 0.3) +
   geom_vline(xintercept = pluck(robpca_mod, "cutoff.sd"), linetype = "solid", color = "red", size = 0.3) +
   labs(subtitle = "ROBPCA Outliers Map", x = "Score distance", y = "Orthogonal distance") +
@@ -155,8 +159,10 @@ plot3 / plot4
 
 ### Comparing ROBPCA and MacroPCA methods
 
-The best way to compare the two methods is to plot their respective cellMap.
-A cellmap is a powerful display of cells that are unusual. More specifically, unusually large cell values are colored in red whilst unusually low cell values are colored in blue. Moreover, a large number of unusual cells values on a single row will tend to contaminate the entire row making the observation flagged as an outlier.
+The best way to compare the two methods is to plot their respective cell map.
+A cell map is a powerful display of cells that are unusual. More specifically, unusually large cell values are colored in red whilst unusually low cell values are colored in blue. Moreover, a large number of unusual cells values on a single row will tend to contaminate the entire row making the observation flagged as an outlier.
+
+* Retrieving ROBPCA data for plotting cell map
 
 ```{r}
 ROBPCAindrows <- which(robpca_mod$od > robpca_mod$cutoff.od)
@@ -202,7 +208,11 @@ plot5 <- cellWise::cellMap(
   drawCircles = FALSE
   ) +
   coord_fixed(ratio = 5) +
-  labs(title = "ROBPCA Residual Map", x = "Wavelength [nm]", y = "Plant Sample") +
+  labs(
+    title = "ROBPCA Residual Map", 
+    x = "Wavelength [nm]", 
+    y = "Plant Sample"
+    ) +
   theme_light(base_size = 8) +
   theme(
     legend.position = "none",
@@ -212,7 +222,9 @@ plot5 <- cellWise::cellMap(
     )
 ```
 
-```{r macroPCA_mod, message=FALSE, warning=FALSE, include=FALSE}
+* MacroPCA modeling and cell map
+
+```{r macroPCA_mod, message=FALSE, warning=FALSE}
 macroPCA_mod <- norm_spec %>%
   select(all_of(wavelength_var)) %>%
   as.matrix() %>%
@@ -286,7 +298,11 @@ plot6 <- cellWise::cellMap(
   drawCircles = FALSE
   ) +
   coord_fixed(ratio = 5) +
-  labs(title = "MacroPCA Residual Map", x = "Wavelength [nm]", y = "Plant Sample") +
+  labs(
+    title = "MacroPCA Residual Map", 
+    x = "Wavelength [nm]", 
+    y = "Plant Sample"
+    ) +
   theme_light(base_size = 8) +
   theme(
     legend.position = "none",
@@ -296,12 +312,19 @@ plot6 <- cellWise::cellMap(
     )
 ```
 
+
+* ROBPCA (upper panel) and MacroPCA (lower panel) cell maps.
+
 ```{r fig.height=15, fig.width=13, out.width="150%", out.height="150%"}
 plot5 / plot6
 ```
 
 
+### References
 
+[1] Peter J. Rousseeuw & Wannes Van Den Bossche (2018) Detecting Deviating Data Cells, Technometrics, 60:2, 135-145, DOI: 10.1080/00401706.2017.1340909
+
+[2] Mia Hubert, Peter J. Rousseeuw & Wannes Van den Bossche (2019) MacroPCA: An All-in-One PCA Method Allowing for Missing Values as Well as Cellwise and Rowwise Outliers, Technometrics, 61:4, 459-473, DOI: 10.1080/00401706.2018.1562989
 
 
 
